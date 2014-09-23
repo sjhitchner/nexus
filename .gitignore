@@ -1,1 +1,5 @@
 coverage.out
+*/client
+*/server
+*/websocket
+*/js
