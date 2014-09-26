@@ -71,22 +71,37 @@ func AddChannel(path string, channel ...*Channel) error {
 		routes[path].PushBack(c)
 	}
 
+	log.Println("Routes", len(routes))
+	for _, v := range routes {
+		log.Println(v.Len())
+	}
+
 	return nil
+}
+
+func CloseChannel(path string, channel *Channel) {
+	lock.Lock()
+	defer lock.Unlock()
+
+	if _, ok := routes[path]; !ok {
+		return
+	}
+
 }
 
 func Route(path string, data interface{}) {
 	lock.RLock()
 	defer lock.RUnlock()
 
+	if _, ok := routes[path]; !ok {
+		return
+	}
+
 	routes[path].RLock()
 	for e := routes[path].Front(); e != nil; e = e.Next() {
 		channel := e.Value.(*Channel)
 		if err := channel.Enqueue(data); err != nil {
-			routes[path].RUnlock()
-			routes[path].Lock()
-			routes[path].Remove(e)
-			routes[path].Unlock()
-			routes[path].RLock()
+			log.Println("tried to write to closed channel")
 		}
 	}
 	routes[path].RUnlock()

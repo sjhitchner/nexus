@@ -3,16 +3,39 @@ package main
 import (
 	"code.google.com/p/go.net/websocket"
 	"fmt"
-	. "github.com/sjhitchner/infosphere/common"
+	//. "github.com/sjhitchner/infosphere/common"
+	"encoding/json"
+	"github.com/sjhitchner/infosphere/interfaces/router"
 	"log"
 	"net/http"
-	"sync"
+	//"sync"
+	"io"
 	"time"
 )
 
+type Payload struct {
+	Bucket    string
+	Data      string
+	CreatedAt time.Time
+}
+
+func (t Payload) String() string {
+	b, _ := json.MarshalIndent(t, "", "  ")
+	return string(b)
+}
+
+func (t Payload) Bytes() []byte {
+	b, _ := json.MarshalIndent(t, "", "  ")
+	return b
+}
+
+var id = 0
+
 func Client1() {
+	id++
+
 	origin := "http://localhost/"
-	url := "ws://localhost:12345/websocket/1"
+	url := fmt.Sprintf("ws://localhost:12345/websocket/%d", id)
 	ws, err := websocket.Dial(url, "", origin)
 	if err != nil {
 		log.Fatal(err)
@@ -24,11 +47,22 @@ func Client1() {
 	var msg = make([]byte, 512)
 	var n int
 
+	done := time.After(3 * time.Second)
 	for {
-		if n, err = ws.Read(msg); err != nil {
-			log.Fatal(err)
+		select {
+		case <-done:
+			ws.Close()
+			return
+		default:
+			if n, err = ws.Read(msg); err != nil {
+				if err == io.EOF {
+					ws.Close()
+					return
+				}
+				log.Println(err)
+			}
+			fmt.Printf("Received: %s.\n", msg[:n])
 		}
-		fmt.Printf("Received: %s.\n", msg[:n])
 	}
 }
 
@@ -57,39 +91,43 @@ func Client2() {
 func main() {
 
 	go func() {
-		select {
-		case <-time.After(5 * time.Second):
-			go Client1()
-			go Client2()
+		for {
+			select {
+			case <-time.After(5 * time.Second):
+				go Client1()
+				//go Client2()
+			}
 		}
 	}()
 
-	channel1 := make(chan Payload, 10)
 	go func() {
 		for {
-			payload := Payload{
-				Bucket:    "test1",
-				Data:      "data1",
-				CreatedAt: time.Now(),
+			select {
+			case <-time.After(100 * time.Millisecond):
+				var payload = Payload{
+					Bucket:    "test1",
+					Data:      "data1",
+					CreatedAt: time.Now(),
+				}
+				router.Route("/websocket/1", payload)
 			}
-			channel1 <- payload
 		}
 	}()
-	channel2 := make(chan Payload, 10)
-	go func() {
-		for {
-			payload := Payload{
-				Bucket:    "test2",
-				Data:      "data2",
-				CreatedAt: time.Now(),
+	/*
+		channel2 := make(chan Payload, 10)
+		go func() {
+			for {
+				payload := Payload{
+					Bucket:    "test2",
+					Data:      "data2",
+					CreatedAt: time.Now(),
+				}
+				channel2 <- payload
 			}
-			channel2 <- payload
-		}
-	}()
+		}()
+	*/
 
 	wm := NewWebsocketManager()
-	wm.AddPath("1", channel1)
-	wm.AddPath("2", channel2)
 	http.Handle("/websocket/", websocket.Handler(wm.Handler))
 	//http.Handle("/websocket/", websocket.Handler(TestHandler(channel)))
 	err := http.ListenAndServe(":12345", nil)
@@ -107,44 +145,10 @@ func TestHandler(channel chan Payload) func(ws *websocket.Conn) {
 }
 
 type WebsocketManager struct {
-	sync.RWMutex
-	channels map[string]chan Payload
 }
 
 func NewWebsocketManager() *WebsocketManager {
-	return &WebsocketManager{
-		sync.RWMutex{},
-		make(map[string]chan Payload),
-	}
-}
-
-func (t *WebsocketManager) AddPath(path string, channel chan Payload) error {
-	t.Lock()
-	defer t.Unlock()
-
-	fullPath := fullPath(path)
-	if _, ok := t.channels[fullPath]; ok {
-		return fmt.Errorf("Path [%s] already in use", fullPath)
-	}
-
-	log.Printf("Added [%s]\n", fullPath)
-	t.channels[fullPath] = channel
-	return nil
-}
-
-func (t *WebsocketManager) RemovePath(path string) error {
-	t.Lock()
-	defer t.Unlock()
-
-	fullPath := fullPath(path)
-	if _, ok := t.channels[fullPath]; !ok {
-		return fmt.Errorf("Path [%s] not configured", fullPath)
-	}
-
-	close(t.channels[fullPath])
-	delete(t.channels, fullPath)
-
-	return nil
+	return &WebsocketManager{}
 }
 
 func (t *WebsocketManager) Handler(ws *websocket.Conn) {
@@ -152,21 +156,38 @@ func (t *WebsocketManager) Handler(ws *websocket.Conn) {
 
 	log.Printf("Handling [%s]\n", path)
 
-	t.RLock()
-	channel, ok := t.channels[path]
-	t.RUnlock()
-
-	if !ok {
+	receiver := router.NewChannel(1)
+	if err := router.AddChannel(path, receiver); err != nil {
 		err := fmt.Errorf("Invalid path [%s]", path)
-		if _, err := ws.Write([]byte(err.Error())); err != nil {
-			log.Printf("Error writing to ws %v", err)
-		}
+		log.Printf(err.Error())
+		handleError(ws, err)
+		return
 	}
 
 	log.Printf("Starting connection to %s...", path)
 	defer log.Printf("Stopping connection to %s...", path)
-	for payload := range channel {
-		ws.Write(payload.Bytes())
+	defer func() {
+		receiver.Close()
+		for _ = range receiver.Dequeue() {
+		}
+	}()
+
+	/*
+		for payload := range receiver.Dequeue() {
+			b, err := json.Marshal(payload)
+			if err != nil {
+				handleError(ws, err)
+			}
+			if _, err := ws.Write(b); err != nil {
+				handleError(ws, err)
+			}
+		}
+	*/
+}
+
+func handleError(ws *websocket.Conn, err error) {
+	if _, err := ws.Write([]byte(err.Error())); err != nil {
+		log.Printf("Error writing error to ws %v", err)
 	}
 }
 
