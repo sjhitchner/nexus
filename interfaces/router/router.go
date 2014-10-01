@@ -47,7 +47,7 @@ type RouteList struct {
 	*list.List
 }
 
-type RouteMap map[string]RouteList
+type RouteMap map[string]*Channel
 
 var lock = sync.RWMutex{}
 var routes = make(RouteMap)
@@ -79,7 +79,7 @@ func AddChannel(path string, channel ...*Channel) error {
 	return nil
 }
 
-func CloseChannel(path string, channel *Channel) {
+func CloseChannel(path string) {
 	lock.Lock()
 	defer lock.Unlock()
 
