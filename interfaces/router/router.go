@@ -1,12 +1,80 @@
 package router
 
 import (
-	"container/list"
-	"errors"
 	"log"
 	"sync"
 )
 
+type Connections map[string]chan interface{}
+type Routes map[string]Connections
+
+var routes = make(Routes)
+var lock = sync.RWMutex{}
+
+func AddRoute(path string, connectionId string, channel chan interface{}) error {
+	lock.Lock()
+	defer lock.Unlock()
+
+	log.Printf("Adding channel for path [%s]\n", path)
+
+	if _, ok := routes[path]; !ok {
+		routes[path] = make(Connections)
+	}
+
+	routes[path][connectionId] = channel
+	return nil
+}
+
+func RemoveRoute(path string, connectionId string) {
+	lock.Lock()
+	defer lock.Unlock()
+
+	if _, ok := routes[path]; !ok {
+		return
+	}
+
+	channel := routes[path][connectionId]
+	close(channel)
+
+	delete(routes[path], connectionId)
+
+	if len(routes[path]) == 0 {
+		delete(routes, path)
+	}
+}
+
+func Route(path string, data interface{}) {
+	lock.RLock()
+	defer lock.RUnlock()
+
+	route, ok := routes[path]
+	if !ok {
+		return
+	}
+	for _, channel := range route {
+		channel <- data
+	}
+
+	log.Println(routes)
+}
+
+/*
+	t.RLock()
+	defer t.RUnlock()
+	select {
+	case <-done:
+		return
+		case <-
+	}
+	if t.closed {
+		return errors.New("channel closed")
+	}
+	channel <- data
+	return nil
+}
+*/
+
+/*
 type Channel struct {
 	sync.RWMutex
 	channel chan interface{}
@@ -21,15 +89,8 @@ func NewChannel(depth int) *Channel {
 	}
 }
 
-func (t *Channel) Enqueue(data interface{}) error {
-	t.RLock()
-	defer t.RUnlock()
-	if t.closed {
-		return errors.New("channel closed")
-	}
-	t.channel <- data
-	return nil
-}
+
+
 
 func (t *Channel) Dequeue() <-chan interface{} {
 	return t.channel
@@ -106,3 +167,4 @@ func Route(path string, data interface{}) {
 	}
 	routes[path].RUnlock()
 }
+*/

@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	//"sync"
+	"code.google.com/p/go-uuid/uuid"
 	"io"
 	"time"
 )
@@ -29,10 +30,10 @@ func (t Payload) Bytes() []byte {
 	return b
 }
 
-var id = 0
+var id = 1
 
 func Client1() {
-	id++
+	//id++
 
 	origin := "http://localhost/"
 	url := fmt.Sprintf("ws://localhost:12345/websocket/%d", id)
@@ -156,8 +157,9 @@ func (t *WebsocketManager) Handler(ws *websocket.Conn) {
 
 	log.Printf("Handling [%s]\n", path)
 
-	receiver := router.NewChannel(1)
-	if err := router.AddChannel(path, receiver); err != nil {
+	receiver := make(chan interface{})
+	connectionId := uuid.New()
+	if err := router.AddRoute(path, connectionId, receiver); err != nil {
 		err := fmt.Errorf("Invalid path [%s]", path)
 		log.Printf(err.Error())
 		handleError(ws, err)
@@ -167,22 +169,20 @@ func (t *WebsocketManager) Handler(ws *websocket.Conn) {
 	log.Printf("Starting connection to %s...", path)
 	defer log.Printf("Stopping connection to %s...", path)
 	defer func() {
-		receiver.Close()
-		for _ = range receiver.Dequeue() {
+		router.RemoveRoute(path, connectionId)
+		for _ = range receiver {
 		}
 	}()
 
-	/*
-		for payload := range receiver.Dequeue() {
-			b, err := json.Marshal(payload)
-			if err != nil {
-				handleError(ws, err)
-			}
-			if _, err := ws.Write(b); err != nil {
-				handleError(ws, err)
-			}
+	for payload := range receiver {
+		b, err := json.Marshal(payload)
+		if err != nil {
+			handleError(ws, err)
 		}
-	*/
+		if _, err := ws.Write(b); err != nil {
+			handleError(ws, err)
+		}
+	}
 }
 
 func handleError(ws *websocket.Conn, err error) {

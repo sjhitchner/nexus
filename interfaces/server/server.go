@@ -1,9 +1,10 @@
 package server
 
 import (
+	"code.google.com/p/go.net/websocket"
 	"fmt"
-	. "github.com/sjhitchner/infosphere/common"
-	"github.com/sjhitchner/infosphere/multiplexer"
+	. "github.com/sjhitchner/infosphere/domain"
+	"github.com/sjhitchner/infosphere/interfaces/multiplex"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -57,6 +58,7 @@ func (t *server) Start(port int, staticPath string) error {
 	http.HandleFunc("/v1/put", t.handleConnection)
 	http.HandleFunc("/ping", t.handlePing)
 	http.Handle("/", http.FileServer(http.Dir(staticPath)))
+	http.Handle("/websocket/", websocket.Handler(websocketHandler))
 
 	var err error
 	t.listener, err = NewListener(fmt.Sprintf(":%d", port))

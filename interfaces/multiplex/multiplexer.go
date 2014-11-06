@@ -1,7 +1,7 @@
 package multiplex
 
 import (
-	. "github.com/sjhitchner/infosphere/common"
+	. "github.com/sjhitchner/infosphere/domain"
 	"log"
 	"sync"
 )
