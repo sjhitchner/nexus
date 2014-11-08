@@ -2,7 +2,7 @@ package aggregator
 
 import (
 	"encoding/json"
-	. "github.com/sjhitchner/infosphere/domain"
+	. "github.com/sjhitchner/nexus/domain"
 	"log"
 	"sync"
 )

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	//. "github.com/sjhitchner/infosphere/common"
 	"encoding/json"
-	"github.com/sjhitchner/infosphere/interfaces/router"
+	"github.com/sjhitchner/nexus/interfaces/router"
 	"log"
 	"net/http"
 	//"sync"

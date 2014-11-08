@@ -1,8 +1,8 @@
 package multiplex
 
 import (
-	. "github.com/sjhitchner/infosphere/domain"
-	"log"
+	. "github.com/sjhitchner/nexus/domain"
+	//"log"
 	"sync"
 )
 
@@ -29,7 +29,7 @@ func (t *multiplexer) AddSink(sink ...Sink) {
 	t.sinks = append(t.sinks, sink...)
 }
 
-func (t *multiplexer) Route(payload Payload) {
+func (t *multiplexer) Multiplex(payload Payload) {
 	t.RLock()
 	defer t.RUnlock()
 

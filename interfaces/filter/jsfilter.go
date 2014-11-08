@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/robertkrimen/otto"
-	. "github.com/sjhitchner/infosphere/interfaces"
-	"github.com/sjhitchner/infosphere/interfaces/router"
+	. "github.com/sjhitchner/nexus/interfaces"
+	"github.com/sjhitchner/nexus/interfaces/router"
 )
 
 type JSFilter struct {

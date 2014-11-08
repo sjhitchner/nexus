@@ -2,7 +2,7 @@ package aggregator
 
 import (
 	"fmt"
-	. "github.com/sjhitchner/infosphere/common"
+	. "github.com/sjhitchner/nexus/common"
 	"sync"
 	"testing"
 	"time"

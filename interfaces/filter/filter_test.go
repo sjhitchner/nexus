@@ -1,7 +1,7 @@
 package filter
 
 import (
-	. "github.com/sjhitchner/infosphere/common"
+	. "github.com/sjhitchner/nexus/common"
 	"testing"
 	"time"
 )
