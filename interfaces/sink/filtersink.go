@@ -1,7 +1,8 @@
-package filter
+package sink
 
+/*
 import (
-	"fmt"
+	//"fmt"
 	"sync"
 )
 
@@ -46,3 +47,4 @@ func (t *defaultFilterSink) AddFilter(filter Filter) {
 		t.filters[bucket] = append(t.filters[bucket], &filter)
 	}
 }
+*/

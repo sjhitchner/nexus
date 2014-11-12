@@ -1,39 +1,38 @@
 package multiplex
 
 import (
-	. "github.com/sjhitchner/nexus/domain"
-	//"log"
+	"github.com/sjhitchner/nexus/interfaces/sink"
 	"sync"
 )
 
 type Multiplexer interface {
-	AddSink(sink ...Sink)
-	Multiplex(payload Payload)
+	AddSink(sink ...sink.Sink)
+	Multiplex(payload interface{})
 }
 
 type multiplexer struct {
 	sync.RWMutex
-	sinks []Sink
+	sinks []sink.Sink
 }
 
 func NewMultiplexer() Multiplexer {
 	return &multiplexer{
 		sync.RWMutex{},
-		make([]Sink, 0, 5),
+		make([]sink.Sink, 0, 5),
 	}
 }
 
-func (t *multiplexer) AddSink(sink ...Sink) {
+func (t *multiplexer) AddSink(sink ...sink.Sink) {
 	t.Lock()
 	defer t.Unlock()
 	t.sinks = append(t.sinks, sink...)
 }
 
-func (t *multiplexer) Multiplex(payload Payload) {
+func (t *multiplexer) Multiplex(payload interface{}) {
 	t.RLock()
 	defer t.RUnlock()
 
-	for _, sink := range t.sinks {
-		sink.Sink(payload)
+	for _, s := range t.sinks {
+		s.Sink(payload)
 	}
 }

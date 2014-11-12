@@ -2,39 +2,46 @@ package aggregator
 
 import (
 	"encoding/json"
-	. "github.com/sjhitchner/nexus/domain"
 	"log"
 	"sync"
 )
 
 const (
-	//BUFFER_SIZE = 128000
-	BUFFER_SIZE = 256
-	DELIMITER   = byte(10)
+	DELIMITER = byte(10)
 )
 
+type Publisher interface {
+	Publish(b []byte)
+}
+
 type Aggregator interface {
-	Sink(data Payload)
+	Sink(payload interface{})
 	Start()
 	Shutdown()
 }
 
 type aggregator struct {
-	wg        sync.WaitGroup
-	channel   chan Payload
-	publisher Publisher
+	wg         sync.WaitGroup
+	channel    chan interface{}
+	publisher  Publisher
+	bufferSize int
+	numWorkers int
 }
 
-func NewAggregator(publisher Publisher) *aggregator {
+func NewAggregator(bufferSize int, numWorkers int, publisher Publisher) *aggregator {
 	return &aggregator{
-		wg:        sync.WaitGroup{},
-		channel:   make(chan Payload, 1000),
-		publisher: publisher,
+		wg:         sync.WaitGroup{},
+		channel:    make(chan interface{}, 1000),
+		publisher:  publisher,
+		bufferSize: bufferSize,
+		numWorkers: numWorkers,
 	}
 }
 
 func (t *aggregator) Start() {
-	go t.worker()
+	for i := 0; i < t.numWorkers; i++ {
+		go t.worker()
+	}
 }
 
 func (t *aggregator) Shutdown() {
@@ -43,7 +50,7 @@ func (t *aggregator) Shutdown() {
 	log.Println("Aggregator Shutdown")
 }
 
-func (t *aggregator) Sink(data Payload) {
+func (t *aggregator) Sink(data interface{}) {
 	t.channel <- data
 }
 
@@ -51,7 +58,7 @@ func (t *aggregator) worker() {
 	t.wg.Add(1)
 	defer t.wg.Done()
 
-	buffer := make([]byte, BUFFER_SIZE)
+	buffer := make([]byte, t.bufferSize)
 	counter := 0
 
 	for payload := range t.channel {
@@ -62,10 +69,10 @@ func (t *aggregator) worker() {
 		}
 		payloadSize := len(b) + 1
 
-		if counter+payloadSize >= BUFFER_SIZE {
-			log.Printf("Fill rate %d/%d=%.02f\n", counter, BUFFER_SIZE, float32(counter)/float32(BUFFER_SIZE))
+		if counter+payloadSize >= t.bufferSize {
+			log.Printf("Fill rate %d/%d=%.02f\n", counter, t.bufferSize, float32(counter)/float32(t.bufferSize))
 			go t.publisher.Publish(buffer)
-			buffer = make([]byte, BUFFER_SIZE)
+			buffer = make([]byte, t.bufferSize)
 			counter = 0
 		}
 
