@@ -1,81 +1,71 @@
-package main
+package publish
 
 import (
+	"bytes"
+	"compress/gzip"
+	"crypto/md5"
+	"fmt"
+	"github.com/crowdmob/goamz/aws"
+	sss "github.com/crowdmob/goamz/s3"
 	"log"
-	"os"
-	"os/signal"
-	"sync"
-	"syscall"
+	"time"
 )
 
-var shutdownChannels []chan bool
-var queue = make(chan Payload, 10000)
-var wg = sync.WaitGroup{}
+const (
+	PATH_FORMAT = "raw/%s/%04d/%02d/%02d/%s"
+)
 
-func Publish(data Payload) {
-	queue <- data
+type S3Publisher struct {
+	s3     *sss.S3
+	bucket *sss.Bucket
 }
 
-func StartPublisher(threads int) { //, publishers ...Publisher) error {
-	go signalHandler()
-
-	shutdownChannel = make([]chan bool, threads)
-
-	for i := 0; i < threads; i++ {
-
-		shutdownChannels[i] = make(chan bool)
-		go publishWorker(shutdownChannels[i])
-	}
-
-	wg.Wait()
-}
-
-func ShutdownPublisher() {
-	for i := 0; i < len(shutdownChannels); i++ {
-		log.Println("X")
-		shutdownChannels[i] <- true
-	}
-
-}
-
-func publishWorker(wg sync.WaitGroup, shutdownChannel chan bool) {
-	log.Println("starting...")
-	wg.Add(1)
-
-	for {
-		select {
-		case payload := <-publishQueue:
-			log.Println(payload)
-		case <-shutdownChannel:
-			log.Println("exiting...")
-			wg.Done()
-			return
-		}
+func NewS3Publisher(auth aws.Auth, region aws.Region, bucketName string) *S3Publisher {
+	s3 := sss.New(auth, region)
+	return &S3Publisher{
+		s3:     s3,
+		bucket: s3.Bucket(bucketName),
 	}
 }
 
-/*
-type Publisher interface {
-	Publish(data Payload)
-}
-
-type BatchPublisher struct {
-}
-
-func (t *BatchPublisher) Publish(data Payload) {
-
-}
-*/
-
-// Handles incoming signals
-func signalHandler() {
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT)
-
-	// Quit the workers if we get signalled
-	select {
-	case <-ch:
-		log.Printf("[INFO] Got a SIGHUP, quiting all workers.")
-		ShutdownPublisher()
+func (t S3Publisher) Publish(namespace string, data []byte) {
+	payload, err := GzipData(data)
+	if err != nil {
+		return //err
 	}
+
+	md5sum, err := computeMD5(payload)
+	if err != nil {
+		return //err
+	}
+
+	now := time.Now().UTC()
+	path := fmt.Sprintf(PATH_FORMAT, namespace, now.Year(), now.Month(), now.Day(), md5sum)
+	//return t.bucket.Put(path, data, "application/json", sss.Private, sss.Options{})
+	log.Println(path)
+
+	return //nil
+}
+
+func GzipData(data []byte) ([]byte, error) {
+	buffer := new(bytes.Buffer)
+
+	writer := gzip.NewWriter(buffer)
+	if _, err := writer.Write(data); err != nil {
+		return nil, err
+	}
+
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+
+	return buffer.Bytes(), nil
+}
+
+func computeMD5(data []byte) (string, error) {
+	h := md5.New()
+	if _, err := h.Write(data); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
