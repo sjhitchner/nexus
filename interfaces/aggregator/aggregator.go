@@ -50,7 +50,7 @@ func (t *aggregator) Start() {
 func (t *aggregator) Shutdown() {
 	close(t.channel)
 	t.wg.Wait()
-	log.Println("Aggregator Shutdown")
+	log.Println("Shutting down Aggregator")
 }
 
 func (t *aggregator) Sink(data interface{}) {
@@ -72,8 +72,9 @@ func (t *aggregator) worker() {
 				log.Println("Aggregator: channel closed")
 				if counter > 0 {
 					t.publisher.Publish(buffer[:counter])
+					counter = 0
 				}
-				break
+				return
 			}
 
 			log.Println("Aggregator: received message")
