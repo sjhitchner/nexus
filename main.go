@@ -1,31 +1,24 @@
 package main
 
 import (
-	"fmt"
+	//"github.com/crowdmob/goamz/aws"
 	srv "github.com/sjhitchner/library/http"
 	agg "github.com/sjhitchner/nexus/interfaces/aggregator"
 	handlers "github.com/sjhitchner/nexus/interfaces/handlers"
 	"github.com/sjhitchner/nexus/interfaces/multiplex"
+	"github.com/sjhitchner/nexus/interfaces/publish"
 	"github.com/sjhitchner/nexus/interfaces/sink"
 	"log"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
+	"time"
 )
 
-type LogPublisher struct {
-	sync.RWMutex
-}
-
-func (t LogPublisher) Publish(b []byte) {
-	t.Lock()
-	defer t.Unlock()
-
-	fmt.Println("====")
-	fmt.Println(string(b))
-	fmt.Println("====")
-}
+const (
+	//AWS_CREDENTIALS = aws.Auth{"zzzz", "zzzz"}
+	BUCKET = "initium-logs"
+)
 
 var server srv.StoppableServer
 var aggregator agg.Aggregator
@@ -33,7 +26,10 @@ var aggregator agg.Aggregator
 func main() {
 	go signalHandler()
 
-	aggregator = agg.NewAggregator(256, 1, LogPublisher{})
+	//s3publisher := publish.NewS3Publisher(AWS_CREDENTIALS, aws.APNortheast, BUCKET)
+
+	aggregator = agg.NewAggregator(512, time.Minute/2, 1, publish.LogPublisher{})
+	//aggregator = agg.NewAggregator(256, 2, s3publisher)
 	aggregator.Start()
 	//rte = router.NewRouter()
 	//rte.AddRoute(agg)
@@ -71,6 +67,10 @@ func signalHandler() {
 		log.Printf("[INFO] Got a SIGHUP, shutting down service.")
 		server.AcceptConnections(false)
 		server.Shutdown()
+
+		// TODO: this is bad shouldn't use a time here
+		time.Sleep(1 * time.Second)
+		aggregator.Shutdown()
 	}
 }
 
