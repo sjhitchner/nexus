@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 )
 
 const (
@@ -26,15 +27,17 @@ type aggregator struct {
 	publisher  Publisher
 	bufferSize int
 	numWorkers int
+	timeout    time.Duration
 }
 
-func NewAggregator(bufferSize int, numWorkers int, publisher Publisher) *aggregator {
+func NewAggregator(bufferSize int, timeout time.Duration, numWorkers int, publisher Publisher) *aggregator {
 	return &aggregator{
 		wg:         sync.WaitGroup{},
 		channel:    make(chan interface{}, 1000),
 		publisher:  publisher,
 		bufferSize: bufferSize,
 		numWorkers: numWorkers,
+		timeout:    timeout,
 	}
 }
 
@@ -61,31 +64,48 @@ func (t *aggregator) worker() {
 	buffer := make([]byte, t.bufferSize)
 	counter := 0
 
-	for payload := range t.channel {
-		b, err := json.Marshal(payload)
-		if err != nil {
-			log.Println("unable to jsonify payload")
-			continue
-		}
-		payloadSize := len(b) + 1
+	timeoutChannel := time.After(t.timeout)
+	for {
+		select {
+		case payload, ok := <-t.channel:
+			if !ok {
+				log.Println("Aggregator: channel closed")
+				if counter > 0 {
+					t.publisher.Publish(buffer[:counter])
+				}
+				break
+			}
 
-		if counter+payloadSize >= t.bufferSize {
-			log.Printf("Fill rate %d/%d=%.02f\n", counter, t.bufferSize, float32(counter)/float32(t.bufferSize))
-			go t.publisher.Publish(buffer)
-			buffer = make([]byte, t.bufferSize)
-			counter = 0
-		}
+			log.Println("Aggregator: received message")
+			b, err := json.Marshal(payload)
+			if err != nil {
+				log.Println("unable to jsonify payload")
+				continue
+			}
+			payloadSize := len(b) + 1
 
-		for i := 0; i < payloadSize-1; i++ {
-			buffer[counter] = b[i]
+			if counter+payloadSize >= t.bufferSize {
+				log.Printf("Fill rate %d/%d=%.02f\n", counter, t.bufferSize, float32(counter)/float32(t.bufferSize))
+				t.publisher.Publish(buffer[:counter])
+				timeoutChannel = time.After(t.timeout)
+				counter = 0
+			}
+
+			for i := 0; i < payloadSize-1; i++ {
+				buffer[counter] = b[i]
+				counter++
+			}
+			buffer[counter] = DELIMITER
 			counter++
-		}
-		buffer[counter] = DELIMITER
-		counter++
-	}
 
-	if counter > 0 {
-		t.publisher.Publish(buffer)
+		case <-timeoutChannel:
+			log.Println("Aggregator: timeout")
+			if counter > 0 {
+				t.publisher.Publish(buffer[:counter])
+				timeoutChannel = time.After(t.timeout)
+				counter = 0
+			}
+		}
 	}
 }
 
