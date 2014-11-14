@@ -65,6 +65,12 @@ func (t PUTHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 }
 
 func HandleJSONPayload(multiplexer multiplex.Multiplexer, resp http.ResponseWriter, req *http.Request) error {
+	// TODO: whitelist / blacklist paths?
+	path, err := parsePathFromRequestURI(req.RequestURI)
+	if err != nil {
+		return err
+	}
+
 	body := req.Body
 	if body == nil {
 		return fmt.Errorf("body is empty")
@@ -72,20 +78,26 @@ func HandleJSONPayload(multiplexer multiplex.Multiplexer, resp http.ResponseWrit
 
 	dec := json.NewDecoder(body)
 	for {
-		var payload interface{}
+		var data interface{}
 
-		if err := dec.Decode(&payload); err == io.EOF {
+		if err := dec.Decode(&data); err == io.EOF {
 			break
 		} else if err != nil {
 			return err
 		}
-		multiplexer.Multiplex(payload)
+
+		multiplexer.Multiplex(path, data)
 	}
 
 	return nil
 }
 
 func HandleMsgPackPayload(multiplexer multiplex.Multiplexer, resp http.ResponseWriter, req *http.Request) error {
+	path, err := parsePathFromRequestURI(req.RequestURI)
+	if err != nil {
+		return err
+	}
+
 	body := req.Body
 	if body == nil {
 		return fmt.Errorf("body is empty")
@@ -93,15 +105,24 @@ func HandleMsgPackPayload(multiplexer multiplex.Multiplexer, resp http.ResponseW
 
 	dec := json.NewDecoder(body)
 	for {
-		var payload interface{}
+		var data interface{}
 
-		if err := dec.Decode(&payload); err == io.EOF {
+		if err := dec.Decode(&data); err == io.EOF {
 			break
 		} else if err != nil {
 			return err
 		}
-		multiplexer.Multiplex(payload)
+
+		multiplexer.Multiplex(path, data)
 	}
 
 	return nil
+}
+
+func parsePathFromRequestURI(uri string) (string, error) {
+	arr := strings.SplitAfterN(uri, "/", 4)
+	if len(arr) != 4 {
+		return "", fmt.Errorf("Invalid requestURI %s", uri)
+	}
+	return arr[3], nil
 }

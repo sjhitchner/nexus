@@ -7,7 +7,7 @@ import (
 
 type Multiplexer interface {
 	AddSink(sink ...sink.Sink)
-	Multiplex(payload interface{})
+	Multiplex(path string, payload interface{})
 }
 
 type multiplexer struct {
@@ -28,11 +28,11 @@ func (t *multiplexer) AddSink(sink ...sink.Sink) {
 	t.sinks = append(t.sinks, sink...)
 }
 
-func (t *multiplexer) Multiplex(payload interface{}) {
+func (t *multiplexer) Multiplex(path string, payload interface{}) {
 	t.RLock()
 	defer t.RUnlock()
 
 	for _, s := range t.sinks {
-		s.Sink(payload)
+		s.Sink(path, payload)
 	}
 }

@@ -6,13 +6,13 @@ import (
 )
 
 type Sink interface {
-	Sink(data interface{})
+	Sink(path string, data interface{})
 }
 
 type LogSink struct {
 }
 
-func (t LogSink) Sink(payload interface{}) {
+func (t LogSink) Sink(path string, payload interface{}) {
 
 	b, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
@@ -20,5 +20,5 @@ func (t LogSink) Sink(payload interface{}) {
 		return
 	}
 
-	log.Println(string(b))
+	log.Printf("%s:%s\n", path, string(b))
 }
