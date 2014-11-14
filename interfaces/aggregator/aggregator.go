@@ -9,6 +9,8 @@ import (
 
 const (
 	DELIMITER = byte(10)
+	// DELIMITER = byte(0)
+	CHANNEL_DEPTH = 1000
 )
 
 type Publisher interface {
@@ -16,50 +18,51 @@ type Publisher interface {
 }
 
 type Aggregator interface {
-	Sink(payload interface{})
-	Start()
+	Sink(path string, payload interface{})
 	Shutdown()
 }
 
 type aggregator struct {
+	sync.RWMutex
 	wg         sync.WaitGroup
-	channel    chan interface{}
+	channels   map[string]chan interface{}
 	publisher  Publisher
 	bufferSize int
-	numWorkers int
 	timeout    time.Duration
 }
 
-func NewAggregator(bufferSize int, timeout time.Duration, numWorkers int, publisher Publisher) *aggregator {
+func NewAggregator(bufferSize int, timeout time.Duration, publisher Publisher) *aggregator {
 	return &aggregator{
 		wg:         sync.WaitGroup{},
-		channel:    make(chan interface{}, 1000),
+		channels:   make(map[string]chan interface{}),
 		publisher:  publisher,
 		bufferSize: bufferSize,
-		numWorkers: numWorkers,
 		timeout:    timeout,
 	}
 }
 
-func (t *aggregator) Start() {
-	for i := 0; i < t.numWorkers; i++ {
-		go t.worker()
+// Sink a path and data
+func (t *aggregator) Sink(path string, data interface{}) {
+	t.RLock()
+	channel, ok := t.channels[path]
+	t.RUnlock()
+
+	if !ok {
+		t.Lock()
+		channel = make(chan interface{}, 1000)
+		t.Unlock()
+
+		go t.worker(path, channel)
+		t.channels[path] = channel
 	}
+	channel <- data
 }
 
-func (t *aggregator) Shutdown() {
-	close(t.channel)
-	t.wg.Wait()
-	log.Println("Shutting down Aggregator")
-}
-
-func (t *aggregator) Sink(data interface{}) {
-	t.channel <- data
-}
-
-func (t *aggregator) worker() {
+func (t *aggregator) worker(path string, channel chan interface{}) {
 	t.wg.Add(1)
 	defer t.wg.Done()
+
+	log.Printf("starting worker for [%s]", path)
 
 	buffer := make([]byte, t.bufferSize)
 	counter := 0
@@ -67,9 +70,9 @@ func (t *aggregator) worker() {
 	timeoutChannel := time.After(t.timeout)
 	for {
 		select {
-		case payload, ok := <-t.channel:
+		case payload, ok := <-channel:
 			if !ok {
-				log.Println("Aggregator: channel closed")
+				log.Printf("Aggregator: channel closed for [%s]", path)
 				if counter > 0 {
 					t.publisher.Publish(buffer[:counter])
 					counter = 0
@@ -77,7 +80,7 @@ func (t *aggregator) worker() {
 				return
 			}
 
-			log.Println("Aggregator: received message")
+			log.Printf("Aggregator: received message for [%s]", path)
 			b, err := json.Marshal(payload)
 			if err != nil {
 				log.Println("unable to jsonify payload")
@@ -100,14 +103,22 @@ func (t *aggregator) worker() {
 			counter++
 
 		case <-timeoutChannel:
-			log.Println("Aggregator: timeout")
-			if counter > 0 {
-				t.publisher.Publish(buffer[:counter])
-				timeoutChannel = time.After(t.timeout)
-				counter = 0
-			}
+			log.Printf("Aggregator: timeout for [%s]", path)
+			t.Lock()
+			delete(t.channels, path)
+			close(channel)
+			t.Unlock()
 		}
 	}
+}
+
+func (t *aggregator) Shutdown() {
+	for path, _ := range t.channels {
+		close(t.channels[path])
+		delete(t.channels, path)
+	}
+	t.wg.Wait()
+	log.Println("Shutting down Aggregator")
 }
 
 /*

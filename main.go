@@ -28,9 +28,9 @@ func main() {
 
 	//s3publisher := publish.NewS3Publisher(AWS_CREDENTIALS, aws.APNortheast, BUCKET)
 
-	aggregator = agg.NewAggregator(512, time.Minute/2, 1, publish.LogPublisher{})
+	aggregator = agg.NewAggregator(256, time.Minute, publish.LogPublisher{})
 	//aggregator = agg.NewAggregator(256, 2, s3publisher)
-	aggregator.Start()
+	//aggregator.Start()
 	//rte = router.NewRouter()
 	//rte.AddRoute(agg)
 	//rte.AddRoute(agg)
@@ -49,7 +49,7 @@ func main() {
 
 	server = srv.NewStoppableServer()
 	server.AddHandler("/api", apiHandler)
-	server.AddHandler("/v1/put", putHandler)
+	server.AddHandler("/v1/put/", putHandler)
 	server.AddHandler("/ping", handlers.HealthCheckHandler{})
 	server.AddHandler("/ws", handlers.WebsocketHandler{})
 	if err := server.Start(8080, "static"); err != nil {
