@@ -92,7 +92,6 @@ func (t *aggregator) worker(path string, channel chan interface{}) {
 			if counter+payloadSize >= t.bufferSize {
 				log.Printf("Fill rate %d/%d=%.02f\n", counter, t.bufferSize, float32(counter)/float32(t.bufferSize))
 				t.publisher.Publish(buffer[:counter])
-				//timeoutChannel = time.After(t.timeout)
 				counter = 0
 			}
 
