@@ -7,7 +7,7 @@ import (
 	handlers "github.com/sjhitchner/nexus/interfaces/handlers"
 	"github.com/sjhitchner/nexus/interfaces/multiplex"
 	"github.com/sjhitchner/nexus/interfaces/publish"
-	"github.com/sjhitchner/nexus/interfaces/sink"
+	//"github.com/sjhitchner/nexus/interfaces/sink"
 	"log"
 	"os"
 	"os/signal"
@@ -28,7 +28,7 @@ func main() {
 
 	//s3publisher := publish.NewS3Publisher(AWS_CREDENTIALS, aws.APNortheast, BUCKET)
 
-	aggregator = agg.NewAggregator(256, time.Minute, publish.LogPublisher{})
+	aggregator = agg.NewAggregator(512, time.Minute/4, publish.LogPublisher{})
 	//aggregator = agg.NewAggregator(256, 2, s3publisher)
 	//aggregator.Start()
 	//rte = router.NewRouter()
@@ -38,7 +38,7 @@ func main() {
 	//srv.AddHandler("application/json", HandleJson)
 
 	multiplexer := multiplex.NewMultiplexer()
-	multiplexer.AddSink(sink.LogSink{})
+	//multiplexer.AddSink(sink.LogSink{})
 	multiplexer.AddSink(aggregator)
 
 	putHandler := handlers.NewPUTHandler(multiplexer)
@@ -69,7 +69,7 @@ func signalHandler() {
 		server.Shutdown()
 
 		// TODO: this is bad shouldn't use a time here
-		time.Sleep(1 * time.Second)
+		//time.Sleep(1 * time.Second)
 		aggregator.Shutdown()
 	}
 }

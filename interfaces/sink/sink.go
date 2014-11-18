@@ -20,5 +20,5 @@ func (t LogSink) Sink(path string, payload interface{}) {
 		return
 	}
 
-	log.Printf("%s:%s\n", path, string(b))
+	log.Printf("LOGSINK %s:%s\n", path, string(b))
 }

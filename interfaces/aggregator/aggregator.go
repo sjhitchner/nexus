@@ -69,8 +69,69 @@ func (t *aggregator) worker(path string, channel chan interface{}) {
 
 	timeoutChannel := time.After(t.timeout)
 	for {
+		log.Println(t.channels)
 		select {
 		case payload, ok := <-channel:
+			if !ok {
+				log.Printf("Aggregator: channel closed for [%s]", path)
+				if counter > 0 {
+					t.publisher.Publish(buffer[:counter])
+					counter = 0
+				}
+				return
+			}
+
+			log.Printf("Aggregator: received message for [%s]", path)
+			b, err := json.Marshal(payload)
+			if err != nil {
+				log.Println("unable to jsonify payload")
+				continue
+			}
+
+			payloadSize := len(b) + 1
+			if counter+payloadSize >= t.bufferSize {
+				log.Printf("Fill rate %d/%d=%.02f\n", counter, t.bufferSize, float32(counter)/float32(t.bufferSize))
+				t.publisher.Publish(buffer[:counter])
+				//timeoutChannel = time.After(t.timeout)
+				counter = 0
+			}
+
+			for i := 0; i < payloadSize-1; i++ {
+				buffer[counter] = b[i]
+				counter++
+			}
+			buffer[counter] = DELIMITER
+			counter++
+
+			timeoutChannel = time.After(t.timeout)
+			log.Println("P:", payload)
+
+		case <-timeoutChannel:
+			log.Printf("Aggregator: timeout for [%s]", path)
+			t.Lock()
+			close(channel)
+			delete(t.channels, path)
+			t.Unlock()
+		}
+	}
+}
+
+func (t *aggregator) Shutdown() {
+	t.Lock()
+	defer t.Unlock()
+
+	for path, _ := range t.channels {
+		close(t.channels[path])
+		delete(t.channels, path)
+	}
+
+	t.wg.Wait()
+	log.Printf("Shutting down Aggregator %v\n", t.channels)
+}
+
+/*
+
+
 			if !ok {
 				log.Printf("Aggregator: channel closed for [%s]", path)
 				if counter > 0 {
@@ -102,26 +163,6 @@ func (t *aggregator) worker(path string, channel chan interface{}) {
 			buffer[counter] = DELIMITER
 			counter++
 
-		case <-timeoutChannel:
-			log.Printf("Aggregator: timeout for [%s]", path)
-			t.Lock()
-			delete(t.channels, path)
-			close(channel)
-			t.Unlock()
-		}
-	}
-}
-
-func (t *aggregator) Shutdown() {
-	for path, _ := range t.channels {
-		close(t.channels[path])
-		delete(t.channels, path)
-	}
-	t.wg.Wait()
-	log.Println("Shutting down Aggregator")
-}
-
-/*
 
 
 		if t.publisher != nil {
