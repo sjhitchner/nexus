@@ -8,7 +8,9 @@ import (
 	"github.com/sjhitchner/nexus/interfaces/multiplex"
 	"github.com/sjhitchner/nexus/interfaces/publish"
 	//"github.com/sjhitchner/nexus/interfaces/sink"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,7 +19,8 @@ import (
 
 const (
 	//AWS_CREDENTIALS = aws.Auth{"zzzz", "zzzz"}
-	BUCKET = "initium-logs"
+	BUCKET           = "initium-logs"
+	ENV_NEXUS_STATUS = "NEXUS_STATIC"
 )
 
 var server srv.StoppableServer
@@ -47,14 +50,32 @@ func main() {
 
 	apiHandler := handlers.APIHandler{}
 
+	wsHandler := handlers.NewWebsocketHandler()
+
 	server = srv.NewStoppableServer()
 	server.AddHandler("/api", apiHandler)
 	server.AddHandler("/v1/put/", putHandler)
 	server.AddHandler("/ping", handlers.HealthCheckHandler{})
-	server.AddHandler("/ws", handlers.WebsocketHandler{})
+	server.AddHandler("/ws", wsHandler.HttpHandler())
+	server.AddHandler("/static", http.FileServer(http.Dir(GetStaticDirectory())))
 	if err := server.Start(8080, "static"); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func GetStaticDirectory() string {
+	staticDir := os.Getenv(ENV_NEXUS_STATUS)
+	if staticDir == "" {
+		panic(fmt.Errorf("Need to set [%s]", ENV_NEXUS_STATUS))
+	}
+	fileInfo, err := os.Stat(staticDir)
+	if err != nil {
+		panic(fmt.Errorf("Error with [%s] %v", ENV_NEXUS_STATUS, err))
+	}
+	if !fileInfo.IsDir() {
+		panic(fmt.Errorf("Error with [%s] not valid directory", ENV_NEXUS_STATUS))
+	}
+	return staticDir
 }
 
 // Handles incoming signals

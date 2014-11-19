@@ -23,14 +23,6 @@ func (t APIHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	resp.WriteHeader(200)
 }
 
-type WebsocketHandler struct {
-}
-
-func (t WebsocketHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
-	log.Println("Websocket")
-	resp.WriteHeader(200)
-}
-
 type HealthCheckHandler struct {
 }
 
