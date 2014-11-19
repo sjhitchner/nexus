@@ -2,15 +2,23 @@ package handlers
 
 import (
 	"code.google.com/p/go.net/websocket"
+	"encoding/json"
 	"log"
 	"net/http"
 )
 
 type WebsocketHandler struct {
+	channel chan interface{}
 }
 
 func NewWebsocketHandler() *WebsocketHandler {
-	return &WebsocketHandler{}
+	return &WebsocketHandler{
+		channel: make(chan interface{}),
+	}
+}
+
+func (t *WebsocketHandler) Sink(path string, data interface{}) {
+	t.channel <- data
 }
 
 func (t *WebsocketHandler) HttpHandler() http.Handler {
@@ -18,8 +26,28 @@ func (t *WebsocketHandler) HttpHandler() http.Handler {
 }
 
 func (t WebsocketHandler) ServeWS(ws *websocket.Conn) {
+	defer ws.Close()
+
 	path := ws.Request().URL.Path
 	log.Printf("Handling [%s]\n", path)
+
+	for payload := range t.channel {
+		b, err := json.Marshal(payload)
+		if err != nil {
+			handleWSError(ws, err)
+			return
+		}
+		if _, err := ws.Write(b); err != nil {
+			handleWSError(ws, err)
+			return
+		}
+	}
+}
+
+func handleWSError(ws *websocket.Conn, err error) {
+	if _, err := ws.Write([]byte(err.Error())); err != nil {
+		log.Printf("Error writing error to ws %v", err)
+	}
 }
 
 /*

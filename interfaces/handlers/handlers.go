@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 )
@@ -29,12 +28,6 @@ type HealthCheckHandler struct {
 func (t HealthCheckHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	log.Println("PING!")
 	resp.WriteHeader(200)
-}
-
-func handleError(resp http.ResponseWriter, statusCode int, msg string, args ...interface{}) {
-	resp.WriteHeader(statusCode)
-	log.Println("ERROR:", fmt.Sprintf(msg, args...))
-	fmt.Fprintf(resp, msg, args)
 }
 
 /*

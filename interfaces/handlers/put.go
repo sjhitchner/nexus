@@ -42,7 +42,7 @@ func (t *PUTHandler) AddContentHandler(contentType string, handler ContentHandle
 
 func (t PUTHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	if req.Method != METHOD_PUT {
-		handleError(resp, http.StatusMethodNotAllowed, "Invalid HTTP Verb [%s]", req.Method)
+		http.Error(resp, fmt.Sprintf("Invalid HTTP Verb [%s]", req.Method), http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -51,12 +51,12 @@ func (t PUTHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	handlerFunc, ok := t.handlers[contentType]
 	t.RUnlock()
 	if !ok {
-		handleError(resp, http.StatusUnsupportedMediaType, "Invalid Content-Type=[%s]", contentType)
+		http.Error(resp, fmt.Sprintf("Invalid Content-Type=[%s]", contentType), http.StatusUnsupportedMediaType)
 		return
 	}
 
 	if err := handlerFunc(t.multiplexer, resp, req); err != nil {
-		handleError(resp, http.StatusInternalServerError, "error occurred")
+		http.Error(resp, err.Error(), http.StatusInternalServerError)
 		return
 	}
 

@@ -39,10 +39,12 @@ func main() {
 	//rte.AddRoute(agg)
 	//rte.AddRoute(agg)
 	//srv.AddHandler("application/json", HandleJson)
+	wsHandler := handlers.NewWebsocketHandler()
 
 	multiplexer := multiplex.NewMultiplexer()
 	//multiplexer.AddSink(sink.LogSink{})
 	multiplexer.AddSink(aggregator)
+	multiplexer.AddSink(wsHandler)
 
 	putHandler := handlers.NewPUTHandler(multiplexer)
 	putHandler.AddContentHandler(handlers.CONTENT_TYPE_JSON, handlers.HandleJSONPayload)
@@ -50,15 +52,13 @@ func main() {
 
 	apiHandler := handlers.APIHandler{}
 
-	wsHandler := handlers.NewWebsocketHandler()
-
 	server = srv.NewStoppableServer()
 	server.AddHandler("/api", apiHandler)
 	server.AddHandler("/v1/put/", putHandler)
 	server.AddHandler("/ping", handlers.HealthCheckHandler{})
 	server.AddHandler("/ws", wsHandler.HttpHandler())
-	server.AddHandler("/static", http.FileServer(http.Dir(GetStaticDirectory())))
-	if err := server.Start(8080, "static"); err != nil {
+	server.AddHandler("/", http.FileServer(http.Dir(GetStaticDirectory())))
+	if err := server.Start(8080); err != nil {
 		log.Fatal(err)
 	}
 }
